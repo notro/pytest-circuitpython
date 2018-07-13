@@ -1,0 +1,5 @@
+include LICENSE
+include README.rst
+include pytest_circuitpython/boardlib/*.py
+
+global-exclude *.py[cod] __pycache__ .pytest_board_cache

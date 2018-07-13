@@ -1,0 +1,10 @@
+site_name: pytest-circuitpython
+site_description: A pytest plugin for running tests with CircuitPython
+site_author: Noralf Trønnes
+
+theme: readthedocs
+
+repo_url: https://github.com/notro/pytest-circuitpython
+
+pages:
+- Home: index.md
