@@ -4,9 +4,10 @@
 import os
 import sys
 import codecs
-from setuptools import setup
+from distutils.version import StrictVersion
+from setuptools import setup, __version__
 
-if sys.version_info < (3, 4):
+if StrictVersion(__version__) < StrictVersion('24.2') and sys.version_info < (3, 4):
     sys.exit("Sorry, Python < 3.4 is not supported (you're using an old version of pip/setuptools)")
 
 
