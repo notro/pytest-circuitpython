@@ -2,8 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 import codecs
 from setuptools import setup
+
+if sys.version_info < (3, 4):
+    sys.exit("Sorry, Python < 3.4 is not supported (you're using an old version of pip/setuptools)")
 
 
 def read(fname):
