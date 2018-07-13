@@ -3,12 +3,12 @@ pytest-circuitpython
 ====================
 
 
-The ```pytest-circuitpython``` `pytest`_ plugin makes it easy to run tests on a CircuitPython board.
+The ```pytest-circuitpython``` `pytest`_ plugin makes it easy to run tests on a `CircuitPython`_ board.
 
 Note:
 This is a very early release. It is yet to be used outside running it's own tests.
 
-Initial discussion happens here: adafruit/circuitpython#980
+Initial discussion happens here: CircuitPython issue `#980`_.
 
 ----
 
@@ -103,7 +103,7 @@ You can install ``pytest-circuitpython`` from Github:
 
 .. code-block:: shell
 
-    $ pip install git+https://github.com/notro/pytest-circuitpython
+    $ pip3 install git+https://github.com/notro/pytest-circuitpython
 
 
 Usage
@@ -114,6 +114,9 @@ Specify which board to run the tests on:
 .. code-block:: shell
 
     $ pytest --board=feather_m0_express
+
+    # or like this depending on your installation
+    $ python3 -m pytest --board=feather_m0_express
 
 The board serial device can be specified either as the CircuitPython build name, USB VID:PID or the tty:
 
@@ -145,7 +148,7 @@ Limitations
   This seems to work for tests but not fixtures, it needs more attention.
 
 * If a test file changes but the file length stays the same, it is not uploaded to the board.
-  Some checksumming is needed to improve on this. hashlib_ would probably have helped if it was included in the build.
+  Some checksumming is needed to improve on this. hashlib_ would probably have helped if it was enabled in the build.
 
 * Namespace cleanup needs improvement by removing more test variables during run to avoid running out of memory. At least classes and modules are missing cleanup (pytest_fixture_post_finalizer(), pytest_runtest_teardown()).
 
@@ -192,5 +195,7 @@ This `pytest`_ plugin was generated with `Cookiecutter`_ along with `@hackebrot`
 .. _hashlib: https://circuitpython.readthedocs.io/en/latest/docs/library/hashlib.html
 .. _pyserial: https://pyserial.readthedocs.io/en/latest/
 .. _`tools/cpboard.py`: https://github.com/adafruit/circuitpython/blob/master/tools/cpboard.py
+.. _`#980`: https://github.com/adafruit/circuitpython/issues/980
 .. _`#1001`: https://github.com/adafruit/circuitpython/issues/1001
 .. _AST: https://en.wikipedia.org/wiki/Abstract_syntax_tree
+.. _CircuitPython: https://github.com/adafruit/circuitpython
