@@ -16,13 +16,13 @@ This plugin uploads and runs tests on a CircuitPython board through it's serial 
 
 The following rules decide if a test or fixture is run on the board:
 
-* If the file name starts with ```test_board_`` all it's tests and fixtures are run on the board.
+* If the file name starts with ``test_board_`` all it's tests and fixtures are run on the board.
 
 * If a test starts with ``test_board_`` or is marked with ``@pytest.mark.board`` it runs on the board.
 
-* If a fixture starts with ```board_``` it is run on the board. pytest does not support ```@pytest.mark``` on fixtures.
+* If a fixture starts with ``board_`` it is run on the board. pytest does not support ``@pytest.mark`` on fixtures.
 
-  Use the ```name``` parameter if you don't want ```board_``` in the fixture name:
+  Use the ``name`` parameter if you don't want ``board_`` in the fixture name:
 
     .. code-block:: python
 
@@ -99,7 +99,7 @@ Requirements
 Installation
 ------------
 
-You can install "pytest-circuitpython" from Github:
+You can install ``pytest-circuitpython`` from Github:
 
 .. code-block:: shell
 
@@ -147,8 +147,7 @@ Limitations
 * If a test file changes but the file length stays the same, it is not uploaded to the board.
   Some checksumming is needed to improve on this. hashlib_ would probably have helped if it was included in the build.
 
-* Namespace cleanup needs improvement by removing more test variables during run to avoid running out of memory.
-At least classes and modules are missing cleanup (pytest_fixture_post_finalizer(), pytest_runtest_teardown()).
+* Namespace cleanup needs improvement by removing more test variables during run to avoid running out of memory. At least classes and modules are missing cleanup (pytest_fixture_post_finalizer(), pytest_runtest_teardown()).
 
 
 Testing
