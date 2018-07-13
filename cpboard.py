@@ -474,7 +474,7 @@ class CPboard:
 
         vendor, _, product = name.partition(':')
         if vendor and product:
-            return CPboard.from_usb(**kwargs, idVendor=int(vendor, 16), idProduct=int(product, 16))
+            return CPboard.from_usb(idVendor=int(vendor, 16), idProduct=int(product, 16), **kwargs)
 
         return CPboard(name, **kwargs)
 
@@ -507,7 +507,7 @@ class CPboard:
         except KeyError:
             raise ValueError("Unknown build name: " + name)
 
-        return CPboard.from_usb(**kwargs, idVendor=vendor, idProduct=product)
+        return CPboard.from_usb(idVendor=vendor, idProduct=product, **kwargs)
 
     @classmethod
     def from_build_name_bootloader(cls, name, **kwargs):
@@ -538,7 +538,7 @@ class CPboard:
         except KeyError:
             raise ValueError("Unknown build name: " + name)
 
-        board = CPboard.from_usb(**kwargs, idVendor=vendor, idProduct=product)
+        board = CPboard.from_usb(idVendor=vendor, idProduct=product, **kwargs)
         board.bootloader = True
         return board
 
@@ -885,7 +885,7 @@ def remote(func):
     def remote_func_wrapper(board, *args, **kwargs):
         __tracebackhide__ = True # Hide this from pytest traceback
         try:
-            return board.exec_func(func, *args, **kwargs, _raise_remote=False, _decorator_strip=r'@cpboard\.remote:')
+            return board.exec_func(func, *args, _raise_remote=False, _decorator_strip=r'@cpboard\.remote:', **kwargs)
         except CPboardRemoteError as e:
             if e.exc:
                 e.exc.__traceback__ = e.create_traceback(func=func)
