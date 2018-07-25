@@ -363,7 +363,7 @@ class ReplDisk(Disk):
 
     def _command(self, command):
         #print('_command', command)
-        self.board.exec(command, out=sys.stdout, reset_repl=False, raise_remote=True)
+        self.board.exec(command, reset_repl=False, raise_remote=True)
 
     def _eval(self, command):
         #print('_eval', command)
