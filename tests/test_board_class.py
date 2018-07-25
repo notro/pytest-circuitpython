@@ -1,7 +1,7 @@
 import pytest
 
 
-class TestClass:
+class TestBoardClass:
     def test_one(self):
         assert pytest.config == 'config'
         self.t = 1

@@ -74,7 +74,7 @@ def pytest_runtestloop(session):
         # print(dir(item), '\n')
         if os.path.basename(item.name).startswith('test_board_') or \
            os.path.basename(item.parent.name).startswith('test_board_') or \
-           (item.cls and item.cls.__name__.startswith('Test')):
+           (item.cls and item.cls.__name__.startswith('TestBoard')):
             item.add_marker('board')
 
     files = []
