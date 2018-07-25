@@ -1,5 +1,6 @@
 import pytest
 import sys
+import time
 import traceback
 import cpboard
 
@@ -48,14 +49,6 @@ def test_exec_eval(board):
     board.exec('a = 5')
     res = board.eval('a + 2', out=sys.stdout, reset_repl=False)
     assert res == 7
-
-
-def board_test_exec_func(a, b):
-    return a + b
-
-def test_exec_func(board):
-    res = board.exec_func(board_test_exec_func, 1, 2, _out=sys.stdout)
-    assert res == 3
 
 
 test_obj_data = [
@@ -218,6 +211,71 @@ def do_test_assert2():
 
 def test_assert2():
     do_test_assert2()
+
+
+def board_test_exec_func(a, b):
+    return a + b
+
+
+def test_execfunc(board):
+    f = cpboard.ExecFunc(board.repl, board_test_exec_func, out=sys.stdout, reset_repl=False)
+    res = f(1, 2)
+    assert res == 3
+
+
+def board_test_server(a, b):
+    import time
+    print('ENTER', a, b, '.')
+    while True:
+        time.sleep(100)
+    print('EXIT')
+
+
+def test_server(board):
+    server = cpboard.Server(board, board_test_server, out=sys.stdout)
+    server.start(23, b=17)
+    time.sleep(0.5)
+    out = server.check()
+    assert 'ENTER 23 17 .' in out
+    server.stop()
+    assert 'EXIT' not in server.output
+
+
+def board_test_server_stopped():
+    print('ENTER')
+
+
+def test_server_stopped(board):
+    server = cpboard.Server(board, board_test_server_stopped, out=sys.stdout)
+    server.start()
+    time.sleep(0.5)
+    with pytest.raises(RuntimeError) as exc_info:
+        server.check()
+    assert 'stopped' in exc_info.value.args[0]
+    assert 'ENTER' in server.output
+
+
+def board_test_server_raises():
+    import time
+    print('ENTER')
+    time.sleep(2)
+    raise ValueError('Oh no')
+
+
+@pytest.mark.parametrize('stop', [0, 1])
+def test_server_raises(board, stop):
+    server = cpboard.Server(board, board_test_server_raises, out=sys.stdout)
+    server.start()
+    time.sleep(0.5)
+    out = server.check()
+    assert 'ENTER' in out
+    time.sleep(3)
+    with pytest.raises(ValueError) as exc_info:
+        if stop:
+            server.stop()
+        else:
+            server.check()
+    assert exc_info.value.args[0] == 'Oh no'
 
 
 # test unicode

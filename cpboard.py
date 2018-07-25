@@ -195,8 +195,11 @@ class REPL:
                     timeout_count = 0
                 else:
                     timeout_count += 1
-                    if timeout is not None and timeout_count >= 100 * timeout:
-                        raise TimeoutError(110, "timeout waiting for", ending)
+                    if timeout is not None:
+                        if timeout <= 0:
+                            return data
+                        if timeout_count >= 100 * timeout:
+                            raise TimeoutError(110, "timeout waiting for", ending)
                     time.sleep(0.01)
             except OSError as e:
                 raise CPboardError('read error', session=self.session) from e
@@ -225,6 +228,18 @@ class REPL:
         self.write(b'\r' + REPL.CHAR_CTRL_B) # enter or reset friendly repl
         data = self.read_until(b'>>> ')
 
+
+    def result(self, timeout=10, out=None):
+        output = self.read_until(b'\x04', timeout=timeout, out=out)
+        if not output or output[-1] != 4:
+            return output, None
+        output = output[:-1]
+
+        error = self.read_until(b'\x04', out=out)
+        error = error[:-1]
+
+        return output, error
+
     def execute(self, code, timeout=10, async=False, out=None):
         self.read() # Throw away
 
@@ -234,17 +249,13 @@ class REPL:
         self.write(code)
 
         self.write(REPL.CHAR_CTRL_D)
-        if async:
-            return b'', b''
+
         self.read_until(b'OK')
 
-        output = self.read_until(b'\x04', timeout=timeout, out=out)
-        output = output[:-1]
-
-        error = self.read_until(b'\x04')
-        error = error[:-1]
-
-        return output, error
+        if async:
+            return b'', b''
+        else:
+            return self.result(timeout=timeout, out=out)
 
     def run(self):
         if self.safe_mode:
@@ -464,6 +475,116 @@ class Firmware:
             disk.copy(fw, sync=False)
 
 
+class ExecFunc:
+    def __init__(self, repl, func, timeout=10, out=None, reset_repl=True, raise_remote=True, decorator_strip=None):
+        self.repl = repl
+        self.func = func
+        self.name = func.__name__
+        self.timeout = timeout
+        self.out = out
+        self.reset_repl = reset_repl
+        self.raise_remote = raise_remote
+        self.decorator_strip = decorator_strip
+        self.debug = False
+        self.source = self.get_source()
+        self.output = b''
+        self.error = None
+
+    def get_source(self):
+        source = inspect.getsource(self.func)
+
+        #print('------------------------\n' + source + '------------------------')
+
+        if self.decorator_strip and source.startswith('@'):
+            s = []
+            done = False
+            for line in source.splitlines():
+                if done:
+                    pass
+                elif re.match(self.decorator_strip, line):
+                    line = ''
+                    done = True
+                elif line.startswith('@'):
+                    line = ''
+                s.append(line)
+            source = '\n'.join(s) + '\n'
+
+        return source
+
+    def create_args(self, *args, **kwargs):
+        arg_str = ', '.join(repr(arg) for arg in args)
+        kwarg_str = ', '.join(['%s=%r' % (k, v) for k, v in kwargs.items()])
+        if arg_str and kwarg_str:
+            return arg_str + ', ' + kwarg_str
+        else:
+            return arg_str + kwarg_str
+
+    def get_exec_source(self, *args, **kwargs):
+        source = self.source
+        all_args = self.create_args(*args, **kwargs)
+        source += "\n\n"
+        source += "res = %s(%s)\n" % (self.name, all_args)
+        source += "print('BEGINMARKER>' + repr(res) + '<ENDMARKER')\n"
+        self.source = source
+
+        if self.debug:
+            print('------------------------------------------------------------------------')
+            print(source)
+            print('------------------------------------------------------------------------')
+
+    def exec(self, *args, **kwargs):
+        self.get_exec_source(*args, **kwargs)
+        if self.reset_repl:
+            self.repl.reset()
+        self.repl.execute(self.source, timeout=self.timeout, async=True, out=self.out)
+
+    def running(self):
+        if self.error is not None:
+            return False
+        output, error = self.repl.result(timeout=0, out=self.out)
+        self.output += output
+        self.error = error
+        return self.error is None
+
+    def result(self):
+        __tracebackhide__ = True # Hide this from pytest traceback
+
+        if self.error is None:
+            output, error = self.repl.result(timeout=self.timeout, out=self.out)
+            self.output += output
+            self.error = error
+
+        if self.error:
+            exc = CPboardRemoteError(self.error, session=self.repl.session)
+
+            if exc.exc and self.raise_remote:
+                exc.exc.__traceback__ = exc.create_traceback(func=self.func)
+                raise exc.exc from exc
+            else:
+                raise exc
+
+        output = self.output.decode('utf-8', errors='replace')
+        #print(output)
+        if 'BEGINMARKER>' not in output or '<ENDMARKER' not in output:
+            raise CPboardError('output is missing markers', output)
+        output = output.split('BEGINMARKER>')[1].split('<ENDMARKER')[0]
+        res = unpickle(output)
+        return res
+
+    def stop(self):
+        if not self.running():
+            return False
+        self.repl.write(b'\r' + REPL.CHAR_CTRL_C + REPL.CHAR_CTRL_C)
+        return True
+
+    def __call__(self, *args, **kwargs):
+        self.exec(*args, **kwargs)
+        return self.result()
+
+    def __str__(self):
+        return self.source
+
+
 class CPboard:
     @classmethod
     def from_try_all(cls, name, **kwargs):
@@ -632,66 +753,6 @@ class CPboard:
             else:
                 raise exc
         return output
-
-    def exec_func(self, func, *args, **kwargs):
-        #__tracebackhide__ = True # Hide this from pytest traceback
-
-        timeout = kwargs.pop('_timeout', 10)
-        async = kwargs.pop('_async', False)
-        out = kwargs.pop('_out', None)
-        reset_repl = kwargs.pop('_reset_repl', True)
-        raise_remote = kwargs.pop('_raise_remote', True)
-        decorator_strip = kwargs.pop('_decorator_strip', None)
-        #res_modifier = kwargs.pop('_res_modifier', None)
-
-        debug = False
-
-        arg_str = ', '.join(repr(arg) for arg in args)
-        kwarg_str = ', '.join(['%s=%r' % (k, v) for k, v in kwargs.items()])
-        if arg_str and kwarg_str:
-            all_args = arg_str + ', ' + kwarg_str
-        else:
-            all_args = arg_str + kwarg_str
-
-        source = inspect.getsource(func)
-
-        #print('------------------------\n' + source + '------------------------')
-
-        if decorator_strip and source.startswith('@'):
-            s = []
-            done = False
-            for line in source.splitlines():
-                if done:
-                    pass
-                elif re.match(decorator_strip, line):
-                    line = ''
-                    done = True
-                elif line.startswith('@'):
-                    line = ''
-                s.append(line)
-            source = '\n'.join(s)
-
-        source += "\n\n"
-        source += "res = %s(%s)\n" % (func.__name__, all_args)
-        #if res_modifier:
-        #    source += res_modifier + '\n'
-
-        source += "print('BEGINMARKER>' + repr(res) + '<ENDMARKER')\n"
-
-        if debug:
-            print('------------------------------------------------------------------------')
-            print(source)
-            print('------------------------------------------------------------------------')
-
-        output = self.exec(source, timeout=timeout, async=async, out=out, reset_repl=reset_repl, raise_remote=raise_remote)
-
-        output = output.decode('utf-8', errors='replace')
-        #print(output)
-        if 'BEGINMARKER>' not in output or '<ENDMARKER' not in output:
-            raise CPboardError('output is missing markers', output)
-        output = output.split('BEGINMARKER>')[1].split('<ENDMARKER')[0]
-        res = unpickle(output)
-        return res
 
     def eval(self, expression, timeout=10, async=False, out=None, reset_repl=True, raise_remote=True, strict=True):
         command = 'print({}, end="")'.format(expression)
@@ -885,7 +946,14 @@ def remote(func):
     def remote_func_wrapper(board, *args, **kwargs):
         __tracebackhide__ = True # Hide this from pytest traceback
         try:
-            return board.exec_func(func, *args, _raise_remote=False, _decorator_strip=r'@cpboard\.remote:', **kwargs)
+            timeout = kwargs.pop('_timeout', 10)
+            async = kwargs.pop('_async', False)
+            out = kwargs.pop('_out', None)
+            reset_repl = kwargs.pop('_reset_repl', True)
+
+            f = ExecFunc(board.repl, func, timeout=timeout, out=out, reset_repl=reset_repl,
+                         raise_remote=False, decorator_strip=r'@cpboard\.remote:')
+            return f(*args, **kwargs)
         except CPboardRemoteError as e:
             if e.exc:
                 e.exc.__traceback__ = e.create_traceback(func=func)
@@ -893,6 +961,56 @@ def remote(func):
             raise
 
     return remote_func_wrapper
+
+
+class Server:
+    def __init__(self, board, func, timeout=10, out=None, reset_repl=True):
+        self.started = False
+        self.prev_output = b''
+        self.xfunc = ExecFunc(board.repl, func, timeout=timeout, out=out, reset_repl=reset_repl, raise_remote=True)
+
+    def __call__(self, *args, **kwargs):
+        return self.start(*args, **kwargs)
+
+    def __enter__(self):
+        if not self.started:
+            self.start()
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.stop()
+
+    @property
+    def output(self):
+        return self.xfunc.output.decode('utf-8', errors='replace')
+
+    def start(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self.started = True
+        self.xfunc.exec(*args, **kwargs)
+        return self
+
+    def stop(self):
+        self.xfunc.stop()
+        self._result()
+
+    def check(self):
+        if self.xfunc.running():
+            if self.prev_output:
+                added = self.xfunc.output.split(self.prev_output)[1]
+            else:
+                added = self.xfunc.output
+            self.prev_output = self.xfunc.output
+            return added.decode('utf-8', errors='replace')
+        self._result()
+        raise RuntimeError('Board server has unexpectedly stopped')
+
+    def _result(self):
+        try:
+            self.xfunc.result()
+        except KeyboardInterrupt:
+            pass
 
 
 @remote
