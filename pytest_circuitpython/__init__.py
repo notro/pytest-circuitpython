@@ -9,6 +9,9 @@ import unittest.mock as mock
 
 import cpboard
 
+from .utils import get_board
+from .fixtures import *  # noqa: F403,F401
+
 
 def pytest_addoption(parser):
     group = parser.getgroup('circuitpython')
@@ -96,7 +99,7 @@ def pytest_runtestloop(session):
         for fixturedef in fixturedefs:
             if not fixturedef.baseid:
                 continue
-            path = inspect.getfile(fixturedef.func)
+            path = os.path.join(str(session.fspath), fixturedef.baseid)
             # print('fixturedef', fixturedef, fixturedef.func, path)
             # print(dir(fixturedef))
             if os.path.basename(path).startswith('test_board_') or fixturedef.func.__name__.startswith('board_'):
@@ -107,16 +110,7 @@ def pytest_runtestloop(session):
     if not files:
         return
 
-    try:
-        board = cpboard.CPboard.from_try_all(session.config.option.boarddev)
-        board.open()
-        board.repl.reset()
-    except cpboard.CPboardError as e:
-        # FIXME: How is print to console done with pytest?
-        print('\nError:', str(e))
-        raise session.Interrupted('Failed to access board') from e
-
-    session.board = board
+    board = get_board(session)
 
     print('\nCopy files to board: ', end='')
     if verbose:
